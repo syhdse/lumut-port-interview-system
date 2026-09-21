@@ -641,4 +641,35 @@ textarea:focus {
   .answer-row > div {
     border-right: 0;
   }
+
+  /* SCORE TABLE - MOBILE */
+  .score {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .score .row {
+    min-width: 720px;
+  }
+
+  .score .row > div {
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .score .criteria {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .score .rating-cell {
+    min-width: 100px;
+    text-align: center;
+  }
+
+  .score .rating-description {
+    font-size: 11px;
+    line-height: 1.3;
+  }
 }
