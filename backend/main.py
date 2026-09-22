@@ -245,13 +245,6 @@ def save_signature(
 
     # Clear existing signature
     if data == "CLEAR":
-
-        if old_name:
-            p = SIGNATURE_DIR / old_name
-
-            if p.exists():
-                p.unlink()
-
         return None
 
     # Only accept PNG data URLs
@@ -260,31 +253,9 @@ def save_signature(
     ):
         return old_name
 
-    try:
-        raw = base64.b64decode(
-            data.split(",", 1)[1],
-            validate=True
-        )
-
-    except (ValueError, binascii.Error):
-        return old_name
-
-    filename = f"{evaluation_id}.png"
-
-    (
-        SIGNATURE_DIR / filename
-    ).write_bytes(raw)
-
-    # Delete old signature if different
-    if old_name and old_name != filename:
-
-        p = SIGNATURE_DIR / old_name
-
-        if p.exists():
-            p.unlink()
-
-    return filename
-
+    # Store the complete PNG data URL
+    # directly in PostgreSQL/Neon.
+    return data
 
 # ============================================================
 # STARTUP
@@ -692,12 +663,19 @@ def serialize(d):
             d["submitted_at"],
 
         "signature_url":
-            (
-                f"/api/signatures/"
-                f"{d['interviewer_signature']}"
-                if d["interviewer_signature"]
-                else None
-            )
+    (
+        d["interviewer_signature"]
+        if d["interviewer_signature"]
+        and d["interviewer_signature"].startswith(
+            "data:image/png;base64,"
+        )
+        else (
+            f"/api/signatures/"
+            f"{d['interviewer_signature']}"
+            if d["interviewer_signature"]
+            else None
+        )
+    ),
     }
 
 
