@@ -223,9 +223,13 @@ export default function View() {
 
             <div className="signature-image-box">
               <img
-                src={`${API}${d.signature_url}`}
-                alt="Interviewer Signature"
-              />
+  src={
+    d.signature_url.startsWith('data:image/')
+      ? d.signature_url
+      : `${API}${d.signature_url}`
+  }
+  alt="Interviewer Signature"
+/>
             </div>
           </div>
         )}
