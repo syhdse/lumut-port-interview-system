@@ -387,8 +387,9 @@ export default function Form({
       );
     };
 
-    image.src =
-      `${API}${data.signature_url}`;
+    image.src = data.signature_url.startsWith('data:image/')
+  ? data.signature_url
+  : `${API}${data.signature_url}`;
   }, [
     edit,
     loaded,
@@ -494,12 +495,15 @@ export default function Form({
     }
 
     const body = {
-      ...data,
-      interviewer_signature:
-        signature,
-    };
+  ...data,
+  interviewer_signature:
+    signature,
+};
 
-    try {
+//console.log('SUBMIT BODY:', body);
+//console.log('API URL:', API);
+
+try {
       const r = await fetch(
         `${API}/api/evaluations${
           edit ? `/${id}` : ''
