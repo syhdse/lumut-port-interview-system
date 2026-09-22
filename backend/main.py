@@ -1,10 +1,12 @@
 import base64
 import binascii
 import os
+from config import ALLOWED_ORIGINS
 from dotenv import load_dotenv
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
 
 import psycopg
 from fastapi import FastAPI, HTTPException
@@ -15,6 +17,7 @@ from pydantic import BaseModel, Field
 
 # Load environment variables from .env
 load_dotenv()
+
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -60,19 +63,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        o.strip()
-        for o in os.getenv(
-            "FRONTEND_ORIGINS",
-            "http://localhost:3000"
-        ).split(",")
-        if o.strip()
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
 
 # ============================================================
 # PYDANTIC MODELS
