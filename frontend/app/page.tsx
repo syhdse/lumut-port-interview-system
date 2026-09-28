@@ -5,6 +5,21 @@ import Link from 'next/link';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+function getUserId() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  let userId = localStorage.getItem('lumut_user_id');
+
+  if (!userId) {
+    userId = `USER-${crypto.randomUUID()}`;
+    localStorage.setItem('lumut_user_id', userId);
+  }
+
+  return userId;
+}
+
 type Rec = {
   evaluation_id: string;
   candidate_name: string;
@@ -24,7 +39,14 @@ export default function Home() {
   const load = () => {
     setLoading(true);
 
-    fetch(`${API}/api/evaluations`)
+  const userId = getUserId();
+
+if (!userId) {
+  setLoading(false);
+  return;
+}
+ 
+   fetch(`${API}/api/evaluations`)
       .then((r) => r.json())
       .then((data) => {
         setRows(data);

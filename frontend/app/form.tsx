@@ -496,8 +496,13 @@ export default function Form({
 
     const body = {
   ...data,
-  interviewer_signature:
-    signature,
+  ...(edit
+    ? {}
+    : {
+        created_by:
+          localStorage.getItem('lumut_user_id'),
+      }),
+  interviewer_signature: signature,
 };
 
 //console.log('SUBMIT BODY:', body);

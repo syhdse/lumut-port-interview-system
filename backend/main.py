@@ -77,6 +77,7 @@ class EvaluationIn(BaseModel):
     candidate_name: str = Field(min_length=1)
     applied_position: str = Field(min_length=1)
     date_of_interview: str = Field(min_length=1)
+    created_by: str | None = None
 
     scores: dict[str, int]
 
@@ -94,7 +95,7 @@ class EvaluationIn(BaseModel):
     interviewer_designation: str = Field(min_length=1)
 
     interviewer_signature: Optional[str] = None
-
+    
 
 class EvaluationOut(EvaluationIn):
     evaluation_id: str
@@ -289,20 +290,33 @@ def health():
     "/api/evaluations",
     response_model=list[EvaluationOut]
 )
-def list_evaluations():
+def list_evaluations(created_by: str | None = None):
 
     with conn() as c:
 
-        # IMPORTANT:
-        # c.execute() returns a Cursor.
-        # description belongs to the Cursor, not Connection.
-        cur = c.execute(
-            """
-            SELECT *
-            FROM interview_evaluations
-            ORDER BY submitted_at DESC
-            """
-        )
+        # If a user ID is provided,
+        # only return evaluations created by that user.
+        if created_by:
+
+            cur = c.execute(
+                """
+                SELECT *
+                FROM interview_evaluations
+                WHERE created_by=%s
+                ORDER BY submitted_at DESC
+                """,
+                (created_by,)
+            )
+
+        else:
+
+            cur = c.execute(
+                """
+                SELECT *
+                FROM interview_evaluations
+                ORDER BY submitted_at DESC
+                """
+            )
 
         rows = cur.fetchall()
 
@@ -317,7 +331,6 @@ def list_evaluations():
         )
         for r in rows
     ]
-
 
 # ============================================================
 # GET ONE EVALUATION
@@ -412,13 +425,14 @@ def create_evaluation(
                 recommendation,
                 interviewer_name,
                 interviewer_signature,
-                interviewer_designation
+                interviewer_designation,
+                created_by
             )
             VALUES
             (
                 %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s
+                %s, %s, %s, %s
             )
             """,
             (
@@ -444,7 +458,8 @@ def create_evaluation(
 
                 data.interviewer_name,
                 sig,
-                data.interviewer_designation
+                data.interviewer_designation,
+                data.created_by
             )
         )
 
