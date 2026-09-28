@@ -1,4 +1,3 @@
-css
 * {
   box-sizing: border-box;
 }
@@ -37,7 +36,6 @@ a {
   border-radius: 12px;
   padding: 30px 28px;
   margin-bottom: 18px;
-
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -93,15 +91,12 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   padding: 11px 16px;
   border: 0;
   border-radius: 7px;
-
   text-decoration: none;
   font-weight: 700;
   font-size: 14px;
-
   transition:
     transform 0.15s ease,
     opacity 0.15s ease,
@@ -226,10 +221,8 @@ textarea {
   width: 100%;
   margin-top: 7px;
   padding: 10px;
-
   border: 1px solid #bbb;
   border-radius: 7px;
-
   font: inherit;
   background: #fff;
 }
@@ -247,22 +240,14 @@ textarea:focus {
 .score {
   border: 1px solid #ccc;
   border-radius: 8px;
-
-  /*
-   * Only allow horizontal scrolling.
-   * Prevent the score table from becoming
-   * its own vertical scroll container.
-   */
   overflow-x: auto;
   overflow-y: hidden;
-
   -webkit-overflow-scrolling: touch;
 }
 
 .row {
   display: grid;
   grid-template-columns: 1.8fr repeat(5, 1fr);
-
   min-width: 800px;
   border-bottom: 1px solid #ddd;
 }
@@ -291,23 +276,14 @@ textarea:focus {
   background: #fafafa;
 }
 
-/*
- * RADIO BUTTON
- *
- * Keep the radio and its description together.
- * position: relative prevents unexpected positioning
- * behaviour when the React state updates.
- */
+/* RADIO BUTTON */
 
 .radio {
   position: relative;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   gap: 6px;
-
   line-height: 1.25;
   cursor: pointer;
 }
@@ -316,11 +292,6 @@ textarea:focus {
   width: auto;
   margin: 0;
   cursor: pointer;
-
-  /*
-   * Prevent the radio input from shrinking
-   * when the cell is narrow.
-   */
   flex-shrink: 0;
 }
 
@@ -334,10 +305,8 @@ textarea:focus {
 .declaration-form {
   margin-top: 18px;
   padding: 16px;
-
   border: 1px solid #ddd;
   border-radius: 8px;
-
   background: #fafafa;
 }
 
@@ -345,7 +314,6 @@ textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   gap: 20px;
 }
 
@@ -358,16 +326,13 @@ textarea:focus {
   display: flex;
   gap: 20px;
   align-items: center;
-
   flex-shrink: 0;
 }
 
 .option-label {
   display: flex;
   align-items: center;
-
   gap: 7px;
-
   cursor: pointer;
   font-weight: 600;
 }
@@ -381,30 +346,24 @@ textarea:focus {
 .relationship-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
-
   gap: 15px;
   margin-top: 18px;
   padding-top: 18px;
-
   border-top: 1px solid #ddd;
 }
 
 .declaration-checkbox {
   margin-top: 15px;
   padding: 14px;
-
   border: 1px solid #ddd;
   border-radius: 8px;
-
   background: #fff;
 }
 
 .checkbox-label {
   display: flex;
   align-items: flex-start;
-
   gap: 10px;
-
   cursor: pointer;
   font-weight: 600;
   line-height: 1.5;
@@ -413,24 +372,8 @@ textarea:focus {
 .checkbox-label input {
   width: auto;
   margin: 3px 0 0;
-
   flex-shrink: 0;
   cursor: pointer;
-}
-
-@media (max-width: 800px) {
-  .declaration-question {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .declaration-options {
-    width: 100%;
-  }
-
-  .relationship-fields {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* VIEW PAGE */
@@ -443,7 +386,6 @@ textarea:focus {
 
 .detail-item {
   padding: 14px;
-
   background: #f7f7f7;
   border: 1px solid #e1e1e1;
   border-radius: 8px;
@@ -455,7 +397,6 @@ textarea:focus {
 .signature-result > span {
   display: block;
   margin-bottom: 6px;
-
   color: #666;
   font-size: 13px;
   font-weight: 600;
@@ -463,7 +404,6 @@ textarea:focus {
 
 .detail-item strong {
   display: block;
-
   font-size: 15px;
   color: #222;
 }
@@ -471,14 +411,12 @@ textarea:focus {
 .answer-table {
   border: 1px solid #ccc;
   border-radius: 8px;
-
   overflow: hidden;
 }
 
 .answer-row {
   display: grid;
   grid-template-columns: 1.7fr 1fr;
-
   border-bottom: 1px solid #ddd;
 }
 
@@ -488,7 +426,6 @@ textarea:focus {
 
 .answer-row > div {
   padding: 12px;
-
   border-right: 1px solid #ddd;
 }
 
@@ -509,15 +446,11 @@ textarea:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
   min-width: 38px;
   height: 32px;
-
   border-radius: 6px;
-
   background: #222;
   color: #fff;
-
   font-weight: 700;
 }
 
@@ -525,13 +458,10 @@ textarea:focus {
 .grand-total {
   margin-top: 15px;
   padding: 15px;
-
   display: flex;
   justify-content: space-between;
   align-items: center;
-
   border-radius: 8px;
-
   background: #f0f0f0;
 }
 
@@ -548,16 +478,13 @@ textarea:focus {
 .answer-block {
   margin-top: 15px;
   padding: 14px;
-
   border: 1px solid #ddd;
   border-radius: 8px;
-
   background: #fafafa;
 }
 
 .answer-block p {
   margin: 0;
-
   white-space: pre-wrap;
   line-height: 1.5;
 }
@@ -570,10 +497,8 @@ textarea:focus {
 
 .declaration-item {
   padding: 13px;
-
   border: 1px solid #ddd;
   border-radius: 8px;
-
   background: #fafafa;
 }
 
@@ -589,21 +514,17 @@ textarea:focus {
   width: 300px;
   max-width: 100%;
   height: 130px;
-
   border: 1px solid #bbb;
   border-radius: 7px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   background: #fff;
 }
 
 .signature-image-box img {
   width: 100%;
   height: 100%;
-
   object-fit: contain;
 }
 
@@ -611,19 +532,15 @@ textarea:focus {
 
 .signature {
   height: 150px;
-
   border: 1px solid #bbb;
   border-radius: 7px;
-
   margin-top: 7px;
-
   background: #fff;
 }
 
 .signature canvas {
   width: 100%;
   height: 100%;
-
   touch-action: none;
   display: block;
 }
@@ -710,13 +627,8 @@ textarea:focus {
 
   .score {
     width: 100%;
-
-    /*
-     * Horizontal scrolling only.
-     */
     overflow-x: auto;
     overflow-y: hidden;
-
     -webkit-overflow-scrolling: touch;
   }
 
@@ -743,5 +655,17 @@ textarea:focus {
     font-size: 11px;
     line-height: 1.3;
   }
+
+  .declaration-question {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .declaration-options {
+    width: 100%;
+  }
+
+  .relationship-fields {
+    grid-template-columns: 1fr;
+  }
 }
-```
