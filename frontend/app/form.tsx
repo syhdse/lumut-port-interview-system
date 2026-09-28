@@ -621,20 +621,17 @@ try {
 
                   <label className="radio">
 
-                    <input
-                      type="radio"
-                      name={c}
-                      value={n}
-                      checked={
-                        Number(
-                          data.scores?.[c]
-                        ) === n
-                      }
-                      onChange={() =>
-                        setScore(c, n)
-                      }
-                      required
-                    />
+                   <input
+                     type="radio"
+                       name={`score-${c}`}
+                       value={n}
+                       checked={Number(data.scores?.[c]) === n}
+                       onChange={(e) => {
+                         e.currentTarget.blur();
+                         setScore(c, n);
+                       }}
+                       required
+                     />
 
                     <span className="rating-description">
                       {descriptions[c]?.[
