@@ -326,11 +326,12 @@ def list_evaluations(created_by: str | None = None):
         ]
 
     return [
-        serialize(
-            dict(zip(cols, r))
-        )
-        for r in rows
-    ]
+    serialize(
+        dict(zip(cols, r)),
+        include_signature=False
+    )
+    for r in rows
+]
 
 # ============================================================
 # GET ONE EVALUATION
@@ -367,8 +368,9 @@ def get_evaluation(evaluation_id: str):
         )
 
     return serialize(
-        dict(zip(cols, r))
-    )
+    dict(zip(cols, r)),
+    include_signature=True
+)
 
 
 # ============================================================
@@ -619,7 +621,17 @@ def delete_evaluation(
 # SERIALIZE DATABASE RECORD
 # ============================================================
 
-def serialize(d):
+def serialize(d, include_signature=False):
+
+    signature_data = None
+
+    if include_signature and d["interviewer_signature"]:
+        signature = d["interviewer_signature"]
+
+        if signature.startswith("data:image/png;base64,"):
+            signature_data = signature
+        else:
+            signature_data = f"/api/signatures/{signature}"
 
     return {
         "evaluation_id":
@@ -667,7 +679,7 @@ def serialize(d):
         "interviewer_name":
             d["interviewer_name"],
 
-        # Do not return the base64 signature
+        # Do not return signature data in dashboard/list
         "interviewer_signature":
             None,
 
@@ -678,21 +690,8 @@ def serialize(d):
             d["submitted_at"],
 
         "signature_url":
-    (
-        d["interviewer_signature"]
-        if d["interviewer_signature"]
-        and d["interviewer_signature"].startswith(
-            "data:image/png;base64,"
-        )
-        else (
-            f"/api/signatures/"
-            f"{d['interviewer_signature']}"
-            if d["interviewer_signature"]
-            else None
-        )
-    ),
+            signature_data,
     }
-
 
 # ============================================================
 # SERVE DIGITAL SIGNATURE
