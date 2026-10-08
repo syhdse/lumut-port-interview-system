@@ -1,4 +1,3 @@
-
 import hashlib
 import hmac
 import os
@@ -183,6 +182,7 @@ def signup(data: AdminSignup):
 def login(data: AdminLogin, response: Response, request: Request):
     email = str(data.email).strip().lower()
 
+    # Keep password verification and session insertion on one DB connection.
     with get_connection() as c:
         row = c.execute("""
             SELECT id, name, email, password_hash
@@ -190,21 +190,16 @@ def login(data: AdminLogin, response: Response, request: Request):
             WHERE email = %s
         """, (email,)).fetchone()
 
-    if not row or not verify_password(data.password, row[3]):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password.",
-        )
+        if not row or not verify_password(data.password, row[3]):
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password.",
+            )
 
-    token = secrets.token_urlsafe(48)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=SESSION_DAYS
-    )
-
-    with get_connection() as c:
+        token = secrets.token_urlsafe(48)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
         c.execute("""
-            INSERT INTO admin_sessions
-                (token_hash, admin_id, expires_at)
+            INSERT INTO admin_sessions (token_hash, admin_id, expires_at)
             VALUES (%s, %s, %s)
         """, (session_hash(token), row[0], expires_at))
 

@@ -10,6 +10,7 @@ from user_session import router as user_router, require_user
 
 
 import psycopg
+from psycopg_pool import ConnectionPool
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
@@ -147,14 +148,24 @@ class EvaluationOut(EvaluationIn):
 # DATABASE CONNECTION
 # ============================================================
 
-def conn():
-    """
-    Create PostgreSQL connection.
+# Pool is scoped to each warm Vercel Function instance (not shared globally).
+# min_size=0 avoids eagerly creating connections during import.
+_db_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=0,
+    max_size=int(os.getenv("DB_POOL_MAX_SIZE", "3")),
+    timeout=8,
+    max_idle=60,
+    kwargs={"connect_timeout": 5},
+    open=False,
+)
 
-    For Vercel + Neon, keep the connection usage short.
-    Every endpoint opens the connection only while it is needed.
-    """
-    return psycopg.connect(DATABASE_URL)
+
+def conn():
+    """Borrow a PostgreSQL connection and return it automatically on exit."""
+    if _db_pool.closed:
+        _db_pool.open()
+    return _db_pool.connection()
 
 
 # ============================================================

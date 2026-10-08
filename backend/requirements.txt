@@ -6,3 +6,4 @@ python-dotenv==1.1.1
 email-validator>=2.2.0
 openpyxl
 python-multipart
+psycopg-pool>=3.2,<4
