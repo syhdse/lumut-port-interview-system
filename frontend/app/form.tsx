@@ -1,12 +1,39 @@
+
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 const API =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-const main = [
+type Mode = 'user' | 'admin';
+
+type FormProps = {
+  edit?: boolean;
+  mode?: Mode;
+};
+
+type EvaluationData = {
+  candidate_name: string;
+  applied_position: string;
+  date_of_interview: string;
+  scores: Record<string, number>;
+  overall_evaluation: string;
+  overall_comment: string;
+  recommendation: string;
+  relationship_declaration: string;
+  relationship_name: string;
+  relationship_detail: string;
+  conflict_of_interest: string;
+  fair_process_declaration: string;
+  interviewer_name: string;
+  interviewer_designation: string;
+  interviewer_signature?: string;
+  signature_url?: string;
+};
+
+const mainCriteria = [
   'Appearance',
   'Working Experience',
   'Communication Skills',
@@ -19,26 +46,19 @@ const main = [
   'Confidence',
 ];
 
-const hse = [
+const hseCriteria = [
   'General HSE Knowledge',
   'HSE Experience',
 ];
 
-/*
- * ==========================================================
- * RATING DESCRIPTIONS
- * ==========================================================
- */
-
 const criteriaDescriptions: Record<string, string[]> = {
   Appearance: [
     'Untidy or inappropriate appearance for the role',
-    'Acceptable but lack polish, room for improvement',
+    'Acceptable but lacks polish, room for improvement',
     'Neat and appropriately dressed',
-    'Well-groomed and present a professional image',
+    'Well-groomed and presents a professional image',
     'Exceptional presentation, highly professional and confident appearance',
   ],
-
   'Working Experience': [
     'No relevant work experience',
     'Limited experience with minimal relevance',
@@ -46,15 +66,13 @@ const criteriaDescriptions: Record<string, string[]> = {
     'Solid background and relevant past roles',
     'Highly relevant, extensive experience directly aligned with the position',
   ],
-
   'Communication Skills': [
     'Struggles to express ideas clearly, difficult to understand',
     'Communicates with difficulty, needs prompting',
     'Communicates adequately, generally understood',
-    'Speaks clearly, confidently, and stay on point',
+    'Speaks clearly, confidently, and stays on point',
     'Articulate, persuasive, and highly effective communicator',
   ],
-
   'Mental Alertness': [
     'Appears disinterested or confused, slow to respond',
     'Basic understanding, but lacks deeper insight',
@@ -62,39 +80,34 @@ const criteriaDescriptions: Record<string, string[]> = {
     'Quickly grasps questions and responds thoughtfully',
     'Highly alert, processes information rapidly and responds insightfully',
   ],
-
   'Expression of Ideas': [
     'Incoherent or disorganized, lacks structure',
     'Ideas are underdeveloped or scattered',
     'Able to convey thoughts with some clarity',
     'Presents ideas logically and coherently',
-    'Express ideas with clarity, depth and strong logic',
+    'Expresses ideas with clarity, depth and strong logic',
   ],
-
   'Scholastic Achievement': [
     'Below required education level',
     'Meets minimum requirement but not in related field',
-    'Meets all the educational requirement',
+    'Meets all the educational requirements',
     'Qualified in the relevant field of study',
-    'Exceed requirements with relevant advanced qualifications or certifications',
+    'Exceeds requirements with relevant advanced qualifications or certifications',
   ],
-
   Initiative: [
     'Passive and disengaged, shows no initiative',
     'Shows minimal curiosity or motivation',
     'Satisfactory enthusiasm, responds to questions',
-    'Shows interest and ask relevant questions',
+    'Shows interest and asks relevant questions',
     'Proactive, enthusiastic and demonstrates leadership potential',
   ],
-
   Determination: [
-    'Lack drive or personal goals',
+    'Lacks drive or personal goals',
     'Appears unmotivated or easily discouraged',
     'Shows basic ambition and desire for improvement',
     'Demonstrates clear goals and motivation to grow',
     'Highly motivated, ambitious, and committed to personal development',
   ],
-
   Personality: [
     'Uncomfortable or overly nervous, poor interpersonal fit',
     'Timid or reserved, lacks openness',
@@ -102,7 +115,6 @@ const criteriaDescriptions: Record<string, string[]> = {
     'Confident, personable, and engaging',
     'Outstanding interpersonal skills, highly likable and composed',
   ],
-
   Confidence: [
     'Insecure, hesitant, or overly arrogant',
     'Lack of confidence or too submissive',
@@ -116,1177 +128,814 @@ const hseDescriptions: Record<string, string[]> = {
   'General HSE Knowledge': [
     'Poor understanding of basic HSE principles',
     'Limited knowledge of common workplace hazards',
-    'Fair understanding of HSE concepts & terminology',
-    'Good knowledge of HSE principles, hazard identification & risk assessment',
-    'Excellent grasp of HSE regulations, best practices & proactive safety management',
+    'Fair understanding of HSE concepts and terminology',
+    'Good knowledge of HSE principles, hazard identification and risk assessment',
+    'Excellent grasp of HSE regulations, best practices and proactive safety management',
   ],
-
   'HSE Experience': [
     'No prior HSE experience',
     'Some awareness of HSE procedures',
     'Participated in HSE training or committees',
     'Assisted in implementing safety measures or conducting inspections',
-    'Led HSE initiatives, managed incidents & ensured regulatory compliance',
+    'Led HSE initiatives, managed incidents and ensured regulatory compliance',
   ],
 };
 
+const initialData: EvaluationData = {
+  candidate_name: '',
+  applied_position: '',
+  date_of_interview: '',
+  scores: {},
+  overall_evaluation: '',
+  overall_comment: '',
+  recommendation: '',
+  relationship_declaration: '',
+  relationship_name: '',
+  relationship_detail: '',
+  conflict_of_interest: 'No',
+  fair_process_declaration: 'No',
+  interviewer_name: '',
+  interviewer_designation: '',
+};
+
+type ScoreSectionProps = {
+  title: string;
+  criteria: string[];
+  descriptions: Record<string, string[]>;
+  scores: Record<string, number>;
+  onChange: (criterion: string, score: number) => void;
+};
+
+function ScoreSection({
+  title,
+  criteria,
+  descriptions,
+  scores,
+  onChange,
+}: ScoreSectionProps) {
+  return (
+    <section className="card">
+      <h2>{title}</h2>
+
+      <div className="score-table-grid">
+        <div className="row score-header">
+          <div className="criteria">Criteria</div>
+          {[1, 2, 3, 4, 5].map((score) => (
+            <div key={score}>{score}</div>
+          ))}
+        </div>
+
+        {criteria.map((criterion) => (
+          <div className="row" key={criterion}>
+            <div className="criteria">{criterion}</div>
+
+            {[1, 2, 3, 4, 5].map((score) => (
+              <div className="rating-cell" key={score}>
+                <label className="radio">
+                  <input
+                    type="radio"
+                    name={`score-${criterion}`}
+                    value={score}
+                    checked={scores[criterion] === score}
+                    onChange={() => onChange(criterion, score)}
+                    required
+                  />
+                  <span className="rating-description">
+                    {descriptions[criterion]?.[score - 1]}
+                  </span>
+                </label>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function Form({
   edit = false,
-}: {
-  edit?: boolean;
-}) {
+  mode = 'user',
+}: FormProps) {
   const router = useRouter();
   const params = useParams();
 
-  const id = edit ? String(params.id) : '';
+  const id = edit ? String(params.id || '') : '';
+  const isAdmin = mode === 'admin';
 
-  const canvas = useRef<HTMLCanvasElement>(null);
+  // Separate navigation for User and Admin.
+  const dashboardUrl = isAdmin ? '/admin/dashboard' : '/';
 
-  const [data, setData] = useState<any>({
-    scores: {},
-  });
+  const viewUrl = isAdmin
+    ? `/admin/view/${id}`
+    : `/view/${id}`;
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const signatureLoadedRef = useRef(false);
+
+  const [data, setData] = useState<EvaluationData>(initialData);
   const [loaded, setLoaded] = useState(!edit);
-
-  const [clear, setClear] = useState(false);
-
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [hasDrawn, setHasDrawn] = useState(false);
+  const [signatureCleared, setSignatureCleared] = useState(false);
 
-  /*
-   * ==========================================================
-   * LOAD EXISTING EVALUATION
-   * ==========================================================
-   */
+  const updateField = (
+    field: keyof EvaluationData,
+    value: string
+  ) => {
+    setData((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+  };
 
+  const updateScore = (criterion: string, score: number) => {
+    setData((previous) => ({
+      ...previous,
+      scores: {
+        ...previous.scores,
+        [criterion]: score,
+      },
+    }));
+  };
+
+  // Load existing evaluation.
   useEffect(() => {
-    if (!edit) return;
+    if (!edit || !id) return;
 
-    fetch(`${API}/api/evaluations/${id}`)
-      .then(async (r) => {
-        if (!r.ok) {
+    let cancelled = false;
+
+    async function loadEvaluation() {
+      try {
+        if (!isAdmin) {
+          const session = await fetch(`${API}/api/user/session`, {
+            method: 'POST',
+            credentials: 'include',
+          });
+          if (!session.ok) throw new Error('Unable to initialize user session.');
+        }
+        const response = await fetch(
+          `${API}/api/evaluations/${encodeURIComponent(id)}?mode=${mode}`,
+          {
+            credentials: 'include',
+            cache: 'no-store',
+          }
+        );
+
+        if (!response.ok) {
           throw new Error('Unable to load evaluation.');
         }
 
-        return r.json();
-      })
-      .then((x) => {
-        setData(x);
-        setLoaded(true);
-      })
-      .catch((err) => {
-        console.error(err);
-        alert('Unable to load evaluation.');
-        router.push('/');
-      });
-  }, [edit, id, router]);
+        const result = await response.json();
 
-  /*
-   * ==========================================================
-   * SETUP SIGNATURE CANVAS
-   * ==========================================================
-   */
+        if (!cancelled) {
+          setData({
+            ...initialData,
+            ...result,
+            scores: result.scores || {},
+          });
+          setLoaded(true);
+        }
+      } catch (error) {
+        console.error(error);
 
+        if (!cancelled) {
+          alert('Unable to load evaluation.');
+          router.push(dashboardUrl);
+        }
+      }
+    }
+
+    loadEvaluation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [edit, id, mode, isAdmin, router, dashboardUrl]);
+
+  // Signature canvas setup.
   useEffect(() => {
-    const c = canvas.current;
+    if (!loaded) return;
 
-    if (!c) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    const parent = c.parentElement;
+    const context = canvas.getContext('2d');
+    if (!context) return;
 
-    if (!parent) return;
-
-    const rect = parent.getBoundingClientRect();
-
-    const width = Math.max(rect.width, 300);
+    const width = canvas.parentElement?.clientWidth || 500;
     const height = 180;
-
     const ratio = window.devicePixelRatio || 1;
 
-    c.width = width * ratio;
-    c.height = height * ratio;
+    canvas.width = width * ratio;
+    canvas.height = height * ratio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
 
-    c.style.width = `${width}px`;
-    c.style.height = `${height}px`;
+    context.scale(ratio, ratio);
+    context.lineWidth = 2;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = '#000000';
 
-    const ctx = c.getContext('2d');
-
-    if (!ctx) return;
-
-    ctx.scale(ratio, ratio);
-
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#000';
-
-    let drawing = false;
-
-    const getPosition = (e: PointerEvent) => {
-      const r = c.getBoundingClientRect();
+    const position = (event: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
 
       return {
-        x: e.clientX - r.left,
-        y: e.clientY - r.top,
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
       };
     };
 
-    const startDrawing = (e: PointerEvent) => {
-      e.preventDefault();
+    const start = (event: PointerEvent) => {
+      event.preventDefault();
+      drawingRef.current = true;
 
-      drawing = true;
-
-      setClear(false);
       setHasDrawn(true);
+      setSignatureCleared(false);
 
-      const pos = getPosition(e);
+      const point = position(event);
 
-      ctx.beginPath();
-      ctx.moveTo(pos.x, pos.y);
+      context.beginPath();
+      context.moveTo(point.x, point.y);
 
-      c.setPointerCapture?.(e.pointerId);
+      canvas.setPointerCapture(event.pointerId);
     };
 
-    const draw = (e: PointerEvent) => {
-      if (!drawing) return;
+    const move = (event: PointerEvent) => {
+      if (!drawingRef.current) return;
 
-      e.preventDefault();
+      event.preventDefault();
 
-      const pos = getPosition(e);
+      const point = position(event);
 
-      ctx.lineTo(pos.x, pos.y);
-      ctx.stroke();
+      context.lineTo(point.x, point.y);
+      context.stroke();
     };
 
-    const stopDrawing = (e: PointerEvent) => {
-      if (!drawing) return;
+    const stop = (event: PointerEvent) => {
+      drawingRef.current = false;
+      context.closePath();
 
-      drawing = false;
-
-      ctx.closePath();
-
-      try {
-        c.releasePointerCapture?.(e.pointerId);
-      } catch {}
+      if (canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
     };
 
-    c.addEventListener(
-      'pointerdown',
-      startDrawing
-    );
-
-    c.addEventListener(
-      'pointermove',
-      draw
-    );
-
-    c.addEventListener(
-      'pointerup',
-      stopDrawing
-    );
-
-    c.addEventListener(
-      'pointercancel',
-      stopDrawing
-    );
+    canvas.addEventListener('pointerdown', start);
+    canvas.addEventListener('pointermove', move);
+    canvas.addEventListener('pointerup', stop);
+    canvas.addEventListener('pointercancel', stop);
 
     return () => {
-      c.removeEventListener(
-        'pointerdown',
-        startDrawing
-      );
-
-      c.removeEventListener(
-        'pointermove',
-        draw
-      );
-
-      c.removeEventListener(
-        'pointerup',
-        stopDrawing
-      );
-
-      c.removeEventListener(
-        'pointercancel',
-        stopDrawing
-      );
+      canvas.removeEventListener('pointerdown', start);
+      canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerup', stop);
+      canvas.removeEventListener('pointercancel', stop);
     };
-  }, []);
+  }, [loaded]);
 
-  /*
-   * ==========================================================
-   * LOAD EXISTING SIGNATURE DURING EDIT
-   * ==========================================================
-   */
-
+  // Restore saved signature when editing.
   useEffect(() => {
-    if (!edit) return;
+    if (!edit || !loaded || signatureLoadedRef.current) return;
 
-    if (!loaded) return;
+    const signature =
+      data.signature_url || data.interviewer_signature;
 
-    if (!data.signature_url) return;
+    if (!signature || signature === 'CLEAR') return;
 
-    const c = canvas.current;
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
 
-    if (!c) return;
-
-    const ctx = c.getContext('2d');
-
-    if (!ctx) return;
+    if (!canvas || !context) return;
 
     const image = new Image();
 
     image.onload = () => {
-      const ratio =
-        window.devicePixelRatio || 1;
-
-      const width =
-        c.width / ratio;
-
-      const height =
-        c.height / ratio;
-
-      ctx.clearRect(
-        0,
-        0,
-        width,
-        height
-      );
+      const ratio = window.devicePixelRatio || 1;
+      const width = canvas.width / ratio;
+      const height = canvas.height / ratio;
 
       const scale = Math.min(
         width / image.width,
         height / image.height
       );
 
-      const drawWidth =
-        image.width * scale;
+      const drawWidth = image.width * scale;
+      const drawHeight = image.height * scale;
 
-      const drawHeight =
-        image.height * scale;
-
-      const x =
-        (width - drawWidth) / 2;
-
-      const y =
-        (height - drawHeight) / 2;
-
-      ctx.drawImage(
+      context.drawImage(
         image,
-        x,
-        y,
+        (width - drawWidth) / 2,
+        (height - drawHeight) / 2,
         drawWidth,
         drawHeight
       );
 
-      setHasDrawn(false);
-      setClear(false);
+      signatureLoadedRef.current = true;
     };
 
-    image.onerror = () => {
-      console.error(
-        'Unable to load signature.'
-      );
-    };
-
-    image.src = data.signature_url.startsWith('data:image/')
-  ? data.signature_url
-  : `${API}${data.signature_url}`;
+    image.src = signature.startsWith('data:image/')
+      ? signature
+      : `${API}${signature.startsWith('/') ? '' : '/'}${signature}`;
   }, [
     edit,
     loaded,
     data.signature_url,
+    data.interviewer_signature,
   ]);
 
-  /*
-   * ==========================================================
-   * LOADING
-   * ==========================================================
-   */
+  const clearSignature = () => {
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext('2d');
+
+    if (!canvas || !context) return;
+
+    const ratio = window.devicePixelRatio || 1;
+
+    context.clearRect(
+      0,
+      0,
+      canvas.width / ratio,
+      canvas.height / ratio
+    );
+
+    setHasDrawn(false);
+    setSignatureCleared(true);
+  };
+
+  const handleSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+
+    if (saving) return;
+
+    const allCriteria = [...mainCriteria, ...hseCriteria];
+
+    if (allCriteria.some((criterion) => !data.scores[criterion])) {
+      alert('Please complete all evaluation ratings.');
+      return;
+    }
+
+    setSaveError('');
+    setSaving(true);
+
+    try {
+      let signature: string | undefined;
+
+      if (signatureCleared) {
+        signature = 'CLEAR';
+      } else if (hasDrawn) {
+        signature = canvasRef.current?.toDataURL('image/png');
+      }
+
+      
+      // The backend derives created_by from the authenticated session.
+      const { interviewer_signature: _previousSignature, signature_url: _signatureUrl, ...fields } = data;
+      const body = {
+        ...fields,
+        ...(signature !== undefined
+          ? { interviewer_signature: signature }
+          : {}),
+      };
+
+      if (!isAdmin) {
+        const sessionResponse = await fetch(`${API}/api/user/session`, {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (!sessionResponse.ok) {
+          throw new Error(`User session failed (${sessionResponse.status}).`);
+        }
+
+        // A successful session response does not guarantee the browser
+        // accepted the cookie. Verify it before attempting to save.
+        const verifyResponse = await fetch(`${API}/api/user/session`, {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const verified = verifyResponse.ok
+          ? await verifyResponse.json()
+          : null;
+        if (!verified?.active) {
+          throw new Error(
+            'User session cookie was not saved by the browser. Check frontend/backend domains and cookie settings.'
+          );
+        }
+      }
+
+      const url = edit
+        ? `${API}/api/evaluations/${encodeURIComponent(id)}?mode=${mode}`
+        : `${API}/api/evaluations?mode=${mode}`;
+
+      const response = await fetch(url, {
+        method: edit ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text();
+        throw new Error(`Save failed (${response.status}): ${detail}`);
+      }
+
+      // Confirm the API returned the saved evaluation before navigating.
+      const saved = await response.json();
+      if (!saved?.evaluation_id) {
+        throw new Error('Save response did not contain an evaluation ID.');
+      }
+
+      alert(edit ? 'Evaluation updated successfully.' : 'Evaluation saved successfully.');
+      router.replace(edit
+        ? `${isAdmin ? '/admin/view' : '/view'}/${encodeURIComponent(saved.evaluation_id)}`
+        : dashboardUrl);
+      router.refresh();
+    } catch (error) {
+      console.error('Evaluation save failed:', error);
+      const message = error instanceof Error ? error.message : 'Unable to save evaluation.';
+      setSaveError(message);
+      alert(message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!loaded) {
     return (
       <main className="container">
-        <div className="card">
-          Loading...
-        </div>
+        <section className="card">Loading evaluation...</section>
       </main>
     );
   }
 
-  /*
-   * ==========================================================
-   * FORM HELPERS
-   * ==========================================================
-   */
-
-  const set = (
-    k: string,
-    v: any
-  ) => {
-    setData((d: any) => ({
-      ...d,
-      [k]: v,
-    }));
-  };
-
-  const setScore = (
-    k: string,
-    v: number
-  ) => {
-    setData((d: any) => ({
-      ...d,
-      scores: {
-        ...d.scores,
-        [k]: v,
-      },
-    }));
-  };
-
-  /*
-   * ==========================================================
-   * CLEAR SIGNATURE
-   * ==========================================================
-   */
-
-  const clearSignature = () => {
-    const c = canvas.current;
-
-    if (!c) return;
-
-    const ctx = c.getContext('2d');
-
-    if (!ctx) return;
-
-    const ratio =
-      window.devicePixelRatio || 1;
-
-    ctx.clearRect(
-      0,
-      0,
-      c.width / ratio,
-      c.height / ratio
-    );
-
-    setClear(true);
-    setHasDrawn(false);
-  };
-
-  /*
-   * ==========================================================
-   * SUBMIT
-   * ==========================================================
-   */
-
-  const submit = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault();
-
-    let signature:
-      | string
-      | undefined;
-
-    if (clear) {
-      signature = 'CLEAR';
-    } else if (hasDrawn) {
-      signature =
-        canvas.current?.toDataURL(
-          'image/png'
-        );
-    }
-
-    const body = {
-  ...data,
-  ...(edit
-    ? {}
-    : {
-        created_by:
-          localStorage.getItem('lumut_user_id'),
-      }),
-  interviewer_signature: signature,
-};
-
-//console.log('SUBMIT BODY:', body);
-//console.log('API URL:', API);
-
-try {
-      const r = await fetch(
-        `${API}/api/evaluations${
-          edit ? `/${id}` : ''
-        }`,
-        {
-          method: edit
-            ? 'PUT'
-            : 'POST',
-
-          headers: {
-            'Content-Type':
-              'application/json',
-          },
-
-          body: JSON.stringify(body),
-        }
-      );
-
-      if (!r.ok) {
-        const error =
-          await r.json();
-
-        alert(
-          error.detail ||
-            'Unable to save evaluation.'
-        );
-
-        return;
-      }
-
-      alert(
-        edit
-          ? 'Evaluation updated successfully.'
-          : 'Evaluation saved successfully.'
-      );
-
-      router.push('/');
-      router.refresh();
-
-    } catch (error) {
-      console.error(error);
-
-      alert(
-        'Unable to connect to the server.'
-      );
-    }
-  };
-
-  /*
-   * ==========================================================
-   * SCORE COMPONENT
-   * ==========================================================
-   */
-
-  const Score = ({
-    items,
-    title,
-    descriptions,
-  }: {
-    items: string[];
-    title: string;
-    descriptions: Record<string, string[]>;
-  }) => (
-    <section className="card">
-
-      <h2>{title}</h2>
-
-      <div className="score">
-
-        {/* HEADER */}
-
-        <div className="row head">
-
-          <div>
-            {title === 'Interview Evaluation'
-              ? 'Rating'
-              : 'Additional Criteria'}
-          </div>
-
-          <div>1</div>
-          <div>2</div>
-          <div>3</div>
-          <div>4</div>
-          <div>5</div>
-
-        </div>
-
-
-        {/* CRITERIA */}
-
-        {items.map((c) => (
-
-          <div
-            className="row"
-            key={c}
-          >
-
-            <div className="criteria">
-              {c}
-            </div>
-
-
-            {[1, 2, 3, 4, 5].map(
-              (n) => (
-
-                <div
-                  key={n}
-                  className="rating-cell"
-                >
-
-                  <label className="radio">
-
-                   <input
-                     type="radio"
-                       name={`score-${c}`}
-                       value={n}
-                       checked={Number(data.scores?.[c]) === n}
-                       onChange={(e) => {
-                         e.currentTarget.blur();
-                         setScore(c, n);
-                       }}
-                       required
-                     />
-
-                    <span className="rating-description">
-                      {descriptions[c]?.[
-                        n - 1
-                      ] || `Rating ${n}`}
-                    </span>
-
-                  </label>
-
-                </div>
-
-              )
-            )}
-
-          </div>
-
-        ))}
-
-      </div>
-
-    </section>
-  );
-
-  /*
-   * ==========================================================
-   * PAGE
-   * ==========================================================
-   */
-
   return (
     <main className="container">
-
-      {/* HEADER */}
-
       <header className="header">
-
         <div className="logo">
-
-          <img
-            src="/logo_bulk.png"
-            alt="Lumut Port"
-          />
-
+          <img src="/logo_bulk.png" alt="Lumut Port" />
         </div>
 
-        <h1>
-          {edit
-            ? `Edit Evaluation - ${id}`
-            : 'Interview Evaluation Form'}
-        </h1>
-
+        <div>
+          <h1>
+            {edit
+              ? 'Edit Interview Evaluation'
+              : 'New Interview Evaluation'}
+          </h1>
+        </div>
       </header>
 
-
-      <form onSubmit={submit}>
-
-        {/* ==================================================
-            CANDIDATE INFORMATION
-        ================================================== */}
-
+      <form onSubmit={handleSubmit}>
+        {/* CANDIDATE INFORMATION */}
         <section className="card">
-
-          <h2>
-            Candidate Information
-          </h2>
+          <h2>Candidate Information</h2>
 
           <div className="grid-3">
-
             <label>
               Candidate Name
-
               <input
-                value={
-                  data.candidate_name ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'candidate_name',
-                    e.target.value
-                  )
+                type="text"
+                value={data.candidate_name}
+                onChange={(event) =>
+                  updateField('candidate_name', event.target.value)
                 }
                 required
               />
-
             </label>
-
 
             <label>
               Applied Position
-
               <input
-                value={
-                  data.applied_position ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'applied_position',
-                    e.target.value
-                  )
+                type="text"
+                value={data.applied_position}
+                onChange={(event) =>
+                  updateField('applied_position', event.target.value)
                 }
                 required
               />
-
             </label>
-
 
             <label>
               Date of Interview
-
               <input
                 type="date"
-                value={
-                  data.date_of_interview ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'date_of_interview',
-                    e.target.value
-                  )
+                value={String(data.date_of_interview || '').slice(0, 10)}
+                onChange={(event) =>
+                  updateField('date_of_interview', event.target.value)
                 }
                 required
               />
-
             </label>
-
           </div>
-
         </section>
 
-
-        {/* ==================================================
-            INTERVIEW EVALUATION
-        ================================================== */}
-
-        <Score
-          items={main}
-          title="Interview Evaluation"
-          descriptions={
-            criteriaDescriptions
-          }
+        {/* MAIN EVALUATION */}
+        <ScoreSection
+          title="Main Evaluation Criteria"
+          criteria={mainCriteria}
+          descriptions={criteriaDescriptions}
+          scores={data.scores}
+          onChange={updateScore}
         />
 
-
-        {/* ==================================================
-            HSE
-        ================================================== */}
-
-        <Score
-          items={hse}
+        {/* HSE EVALUATION */}
+        <ScoreSection
           title="Additional Criteria (HSE)"
-          descriptions={
-            hseDescriptions
-          }
+          criteria={hseCriteria}
+          descriptions={hseDescriptions}
+          scores={data.scores}
+          onChange={updateScore}
         />
 
-
-        {/* ==================================================
-            OVERALL EVALUATION
-        ================================================== */}
-
+        {/* OVERALL EVALUATION */}
         <section className="card">
-
-          <h2>
-            Overall Evaluation
-          </h2>
+          <h2>Overall Evaluation</h2>
 
           <div className="grid-2">
-
             <label>
-              Overall
-
+              Overall Evaluation
               <select
-                value={
-                  data.overall_evaluation ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'overall_evaluation',
-                    e.target.value
-                  )
+                value={data.overall_evaluation}
+                onChange={(event) =>
+                  updateField('overall_evaluation', event.target.value)
                 }
                 required
               >
-
-                <option value="">
-                  -- Select --
-                </option>
-
-                {[
-                  'Poor',
-                  'Fair',
-                  'Average',
-                  'Good',
-                  'Superior',
-                ].map((x) => (
-
-                  <option
-                    key={x}
-                    value={x}
-                  >
-                    {x}
-                  </option>
-
-                ))}
-
+                <option value="">-- Select --</option>
+                <option value="Poor">Poor</option>
+                <option value="Fair">Fair</option>
+                <option value="Average">Average</option>
+                <option value="Good">Good</option>
+                <option value="Superior">Superior</option>
               </select>
-
             </label>
-
 
             <label>
               Recommendation
-
               <select
-                value={
-                  data.recommendation ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'recommendation',
-                    e.target.value
-                  )
+                value={data.recommendation}
+                onChange={(event) =>
+                  updateField('recommendation', event.target.value)
                 }
                 required
               >
-
-                <option value="">
-                  -- Select --
+                <option value="">-- Select --</option>
+                <option value="Recommend for employment">
+                  Recommend for employment
                 </option>
-
-                {[
-                  'Recommend for employment',
-                  'Recommend interview for other position',
-                  'Not recommended',
-                ].map((x) => (
-
-                  <option
-                    key={x}
-                    value={x}
-                  >
-                    {x}
-                  </option>
-
-                ))}
-
+                <option value="Recommend interview for other position">
+                  Recommend interview for other position
+                </option>
+                <option value="Not recommended">
+                  Not recommended
+                </option>
               </select>
-
             </label>
-
           </div>
 
-
           <label>
-
             Overall Comment
-
             <textarea
               rows={4}
-              value={
-                data.overall_comment ||
-                ''
-              }
-              onChange={(e) =>
-                set(
-                  'overall_comment',
-                  e.target.value
-                )
+              value={data.overall_comment}
+              onChange={(event) =>
+                updateField('overall_comment', event.target.value)
               }
             />
-
           </label>
-
         </section>
 
-
-        {/* ==================================================
-            DECLARATION
-        ================================================== */}
-
+        {/* DECLARATION */}
         <section className="card">
-
-          <h2>
-            Declaration
-          </h2>
-
+          <h2>Declaration</h2>
 
           <p>
             I, the undersigned member of the interview panel,
             hereby declare that:
           </p>
 
-
-          {/* RELATIONSHIP */}
-
           <div className="declaration-form">
-
             <div className="declaration-question">
-
               <span className="declaration-label">
                 Do you have any relatives/relationship with the candidate?
               </span>
 
-
               <div className="declaration-options">
-
-                <label className="option-label">
-
-                  <input
-                    type="radio"
-                    name="relationship_declaration"
-                    value="No"
-                    checked={
-                      data.relationship_declaration ===
-                      'No'
-                    }
-                    onChange={() => {
-
-                      set(
-                        'relationship_declaration',
-                        'No'
-                      );
-
-                      set(
-                        'relationship_name',
-                        ''
-                      );
-
-                      set(
-                        'relationship_detail',
-                        ''
-                      );
-
-                    }}
-                    required
-                  />
-
-                  <span>
-                    No
-                  </span>
-
-                </label>
-
-
-                <label className="option-label">
-
-                  <input
-                    type="radio"
-                    name="relationship_declaration"
-                    value="Yes"
-                    checked={
-                      data.relationship_declaration ===
-                      'Yes'
-                    }
-                    onChange={() =>
-                      set(
-                        'relationship_declaration',
-                        'Yes'
-                      )
-                    }
-                  />
-
-                  <span>
-                    Yes
-                  </span>
-
-                </label>
-
+                {['No', 'Yes'].map((option) => (
+                  <label className="option-label" key={option}>
+                    <input
+                      type="radio"
+                      name="relationship_declaration"
+                      value={option}
+                      checked={data.relationship_declaration === option}
+                      onChange={() => {
+                        setData((previous) => ({
+                          ...previous,
+                          relationship_declaration: option,
+                          relationship_name:
+                            option === 'No'
+                              ? ''
+                              : previous.relationship_name,
+                          relationship_detail:
+                            option === 'No'
+                              ? ''
+                              : previous.relationship_detail,
+                        }));
+                      }}
+                      required
+                    />
+                    <span>{option}</span>
+                  </label>
+                ))}
               </div>
-
             </div>
 
-
-            {/* SHOW ONLY WHEN YES */}
-
-            {data.relationship_declaration ===
-              'Yes' && (
-
+            {data.relationship_declaration === 'Yes' && (
               <div className="relationship-fields">
-
                 <label>
-
                   Name of Related Person
-
                   <input
                     type="text"
-                    value={
-                      data.relationship_name ||
-                      ''
-                    }
-                    onChange={(e) =>
-                      set(
+                    value={data.relationship_name}
+                    onChange={(event) =>
+                      updateField(
                         'relationship_name',
-                        e.target.value
+                        event.target.value
                       )
                     }
                     required
                   />
-
                 </label>
-
 
                 <label>
-
                   Relationship
-
                   <input
                     type="text"
-                    value={
-                      data.relationship_detail ||
-                      ''
-                    }
-                    onChange={(e) =>
-                      set(
+                    value={data.relationship_detail}
+                    onChange={(event) =>
+                      updateField(
                         'relationship_detail',
-                        e.target.value
+                        event.target.value
                       )
                     }
-                    placeholder="e.g. Friend, Relative, Former Colleague"
                     required
                   />
-
                 </label>
-
               </div>
-
             )}
-
           </div>
 
-
-          {/* CONFLICT OF INTEREST */}
-
           <div className="declaration-checkbox">
-
             <label className="checkbox-label">
-
               <input
                 type="checkbox"
-                checked={
-                  data.conflict_of_interest ===
-                  'Yes'
-                }
-                onChange={(e) =>
-                  set(
+                checked={data.conflict_of_interest === 'Yes'}
+                onChange={(event) =>
+                  updateField(
                     'conflict_of_interest',
-                    e.target.checked
-                      ? 'Yes'
-                      : 'No'
+                    event.target.checked ? 'Yes' : 'No'
                   )
                 }
                 required
               />
-
               <span>
-                I have no conflict of interest that may affect
-                my impartiality in assessing the candidate.
+                I have no conflict of interest that may affect my
+                impartiality in assessing the candidate.
               </span>
-
             </label>
-
           </div>
 
-
-          {/* FAIR PROCESS */}
-
           <div className="declaration-checkbox">
-
             <label className="checkbox-label">
-
               <input
                 type="checkbox"
-                checked={
-                  data.fair_process_declaration ===
-                  'Yes'
-                }
-                onChange={(e) =>
-                  set(
+                checked={data.fair_process_declaration === 'Yes'}
+                onChange={(event) =>
+                  updateField(
                     'fair_process_declaration',
-                    e.target.checked
-                      ? 'Yes'
-                      : 'No'
+                    event.target.checked ? 'Yes' : 'No'
                   )
                 }
                 required
               />
-
               <span>
                 We shall conduct the interview process fairly,
-                transparently, and based solely on merit and
-                the candidate's qualifications, experience,
-                and performance during the interview.
+                transparently, and based solely on merit and the
+                candidate&apos;s qualifications, experience and
+                performance during the interview.
               </span>
-
             </label>
-
           </div>
-
         </section>
 
-
-        {/* ==================================================
-            INTERVIEWED BY
-        ================================================== */}
-
+        {/* INTERVIEWER INFORMATION */}
         <section className="card">
-
-          <h2>
-            Interviewed By
-          </h2>
-
+          <h2>Interviewed By</h2>
 
           <div className="grid-3">
-
-            {/* NAME */}
-
             <label>
-
               Name
-
               <input
-                value={
-                  data.interviewer_name ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
-                    'interviewer_name',
-                    e.target.value
-                  )
+                type="text"
+                value={data.interviewer_name}
+                onChange={(event) =>
+                  updateField('interviewer_name', event.target.value)
                 }
                 required
               />
-
             </label>
 
-
-            {/* SIGNATURE */}
-
             <div>
-
-              <label>
-                Signature
-              </label>
-
+              <label>Signature</label>
 
               <div
                 className="signature"
                 style={{
                   width: '100%',
-                  maxWidth: '500px',
-                  height: '180px',
-                  border:
-                    '1px solid #ccc',
-                  borderRadius: '8px',
-                  background:
-                    '#fff',
+                  maxWidth: 500,
+                  height: 180,
+                  border: '1px solid #ccc',
+                  borderRadius: 8,
+                  background: '#fff',
                   overflow: 'hidden',
                 }}
               >
-
                 <canvas
-                  ref={canvas}
+                  ref={canvasRef}
                   style={{
                     display: 'block',
                     width: '100%',
-                    height: '180px',
+                    height: 180,
                     touchAction: 'none',
                     cursor: 'crosshair',
                   }}
                 />
-
               </div>
-
 
               <button
                 type="button"
                 className="btn secondary"
-                onClick={
-                  clearSignature
-                }
+                onClick={clearSignature}
               >
                 Clear Signature
               </button>
 
-
               <p className="small">
-                Draw using mouse,
-                trackpad or touchscreen.
+                Draw using mouse, trackpad or touchscreen.
               </p>
-
             </div>
 
-
-            {/* DESIGNATION */}
-
             <label>
-
               Designation
-
               <input
-                value={
-                  data.interviewer_designation ||
-                  ''
-                }
-                onChange={(e) =>
-                  set(
+                type="text"
+                value={data.interviewer_designation}
+                onChange={(event) =>
+                  updateField(
                     'interviewer_designation',
-                    e.target.value
+                    event.target.value
                   )
                 }
                 required
               />
-
             </label>
-
           </div>
-
         </section>
 
+        {saveError && (
+          <section className="card" role="alert" style={{ color: '#b91c1c' }}>
+            <strong>Unable to save evaluation</strong>
+            <p>{saveError}</p>
+          </section>
+        )}
 
-        {/* ==================================================
-            ACTION BUTTONS
-        ================================================== */}
-
+        {/* ACTION BUTTONS */}
         <div className="actions">
-
           <button
             type="button"
             className="btn secondary"
-            onClick={() =>
-              router.push('/')
-            }
+            onClick={() => router.push(dashboardUrl)}
           >
             Cancel
           </button>
 
-
           <button
             type="submit"
             className="btn primary"
+            disabled={saving}
           >
-            {edit
-              ? 'Update Evaluation'
-              : 'Save Evaluation'}
+            {saving
+              ? 'Saving...'
+              : edit
+                ? 'Update Evaluation'
+                : 'Save Evaluation'}
           </button>
-
         </div>
-
       </form>
-
     </main>
   );
 }

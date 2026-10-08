@@ -29,20 +29,19 @@ const hseCriteria = [
 export default function View() {
   const { id } = useParams();
   const [d, setD] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   /* =====================================================
      CHECK WHERE USER CAME FROM
   ====================================================== */
 
-    const backUrl = '/';
+     const backUrl = '/admin/dashboard';
 
-    const editUrl = `/edit/${id}`;
+     const editUrl = `/admin/edit/${encodeURIComponent(String(id))}`;
 
   /* =====================================================
      LOAD EVALUATION
   ====================================================== */
-
-  const [loadError, setLoadError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -50,26 +49,24 @@ export default function View() {
 
     async function loadEvaluation() {
       try {
-        const session = await fetch(`${API}/api/user/session`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-        if (!session.ok) throw new Error('Unable to initialize user session.');
-
+        setError(null);
         const response = await fetch(
-          `${API}/api/evaluations/${encodeURIComponent(String(id))}?mode=user`,
+          `${API}/api/evaluations/${encodeURIComponent(String(id))}?mode=admin`,
           { credentials: 'include', cache: 'no-store' }
         );
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Admin session expired. Please log in again.');
+        }
         if (!response.ok) {
-          throw new Error(response.status === 404
-            ? 'Evaluation not found or access denied.'
-            : 'Failed to load evaluation.');
+          throw new Error('Unable to load evaluation.');
         }
         const data = await response.json();
         if (!cancelled) setD(data);
-      } catch (error) {
-        console.error('Failed to load evaluation:', error);
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : 'Unable to load evaluation.');
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load evaluation:', err);
+          setError(err instanceof Error ? err.message : 'Unable to load evaluation.');
+        }
       }
     }
 
@@ -85,7 +82,15 @@ export default function View() {
     return (
       <main className="container">
         <div className="card">
-          Loading...
+          {error || 'Loading...'}
+          {error && (
+            <div style={{ marginTop: 16 }}>
+              <Link href="/admin/dashboard" className="btn secondary">Back to Dashboard</Link>
+              {error.includes('session') && (
+                <Link href="/admin/login" className="btn primary" style={{ marginLeft: 12 }}>Admin Login</Link>
+              )}
+            </div>
+          )}
         </div>
       </main>
     );

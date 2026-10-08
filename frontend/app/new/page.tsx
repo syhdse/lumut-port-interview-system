@@ -1,1 +1,6 @@
-import Form from '../form'; export default function New(){return <Form/>}
+
+import Form from '../form';
+
+export default function NewEvaluationPage() {
+  return <Form mode="user" />;
+}

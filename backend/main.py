@@ -1,14 +1,23 @@
 import os
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
+from io import BytesIO
+import re
 from typing import Optional
 
+from auth import router as admin_router, create_admin_tables, current_admin
+from user_session import router as user_router, require_user
+
+
 import psycopg
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
 from config import ALLOWED_ORIGINS
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 
@@ -65,8 +74,30 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+
+
 )
+
+app.include_router(admin_router)
+app.include_router(user_router)
+
+def access_identity(request: Request, mode: str) -> str | None:
+    """Admin: verified DB session; User: cookie-derived identity."""
+    if mode == "admin":
+        current_admin(request)
+        return None
+    return require_user(request)
+
+
+def require_record_owner(c, evaluation_id: str, owner: str | None):
+    """404 for missing or inaccessible records; admins bypass owner check."""
+    row = c.execute(
+        "SELECT created_by FROM interview_evaluations WHERE evaluation_id=%s",
+        (evaluation_id,),
+    ).fetchone()
+    if row is None or (owner is not None and row[0] != owner):
+        raise HTTPException(status_code=404, detail="Record not found.")
 
 
 # ============================================================
@@ -138,45 +169,34 @@ def init_db():
             """
             CREATE TABLE IF NOT EXISTS interview_evaluations (
                 evaluation_id VARCHAR(20) PRIMARY KEY,
-
                 candidate_name TEXT NOT NULL,
-
                 applied_position TEXT NOT NULL,
-
                 date_of_interview DATE NOT NULL,
-
                 scores JSONB NOT NULL,
-
                 main_total INTEGER NOT NULL,
-
                 hse_total INTEGER NOT NULL,
-
                 grand_total INTEGER NOT NULL,
-
                 overall_evaluation TEXT NOT NULL,
-
                 overall_comment TEXT DEFAULT '',
-
                 relationship_declaration TEXT DEFAULT '',
-
                 conflict_of_interest TEXT DEFAULT 'No',
-
                 fair_process_declaration TEXT DEFAULT 'No',
-
                 recommendation TEXT NOT NULL,
-
                 interviewer_name TEXT NOT NULL,
-
                 interviewer_signature TEXT,
-
                 interviewer_designation TEXT NOT NULL,
-
                 submitted_at TIMESTAMP NOT NULL
                     DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
 
+        c.execute(
+            """
+            ALTER TABLE interview_evaluations
+            ADD COLUMN IF NOT EXISTS created_by TEXT;
+            """
+        )
 
 # ============================================================
 # GENERATE NEXT EVALUATION ID
@@ -395,10 +415,12 @@ def row_to_dict(cur, row):
 # STARTUP
 # ============================================================
 
+
 @app.on_event("startup")
 def startup():
-
     init_db()
+    create_admin_tables()
+
 
 
 # ============================================================
@@ -428,7 +450,8 @@ def health():
     response_model=list[EvaluationOut]
 )
 def list_evaluations(
-    created_by: str | None = None
+    request: Request,
+    mode: str = Query(..., pattern="^(user|admin)$"),
 ):
 
     """
@@ -442,9 +465,10 @@ def list_evaluations(
     the main reasons dashboard loading was slow.
     """
 
+    owner = access_identity(request, mode)
     with conn() as c:
 
-        if created_by:
+        if owner is not None:
 
             cur = c.execute(
                 """
@@ -478,7 +502,7 @@ def list_evaluations(
                 ORDER BY submitted_at DESC
                 """,
                 (
-                    created_by,
+                    owner,
                 )
             )
 
@@ -542,7 +566,9 @@ def list_evaluations(
     response_model=EvaluationOut
 )
 def get_evaluation(
-    evaluation_id: str
+    evaluation_id: str,
+    request: Request,
+    mode: str = Query(..., pattern="^(user|admin)$"),
 ):
 
     """
@@ -552,8 +578,9 @@ def get_evaluation(
     needs the signature.
     """
 
+    owner = access_identity(request, mode)
     with conn() as c:
-
+        require_record_owner(c, evaluation_id, owner)
         cur = c.execute(
             """
             SELECT *
@@ -595,9 +622,12 @@ def get_evaluation(
     status_code=201
 )
 def create_evaluation(
-    data: EvaluationIn
+    data: EvaluationIn,
+    request: Request,
+    mode: str = Query(..., pattern="^(user|admin)$"),
 ):
 
+    owner = access_identity(request, mode)
     main, hse = validate_scores(
         data.scores
     )
@@ -692,7 +722,7 @@ def create_evaluation(
 
                 data.interviewer_designation,
 
-                data.created_by
+                owner
             )
         )
 
@@ -730,9 +760,12 @@ def create_evaluation(
 )
 def update_evaluation(
     evaluation_id: str,
-    data: EvaluationIn
+    data: EvaluationIn,
+    request: Request,
+    mode: str = Query(..., pattern="^(user|admin)$"),
 ):
 
+    owner = access_identity(request, mode)
     main, hse = validate_scores(
         data.scores
     )
@@ -747,7 +780,7 @@ def update_evaluation(
     )
 
     with conn() as c:
-
+        require_record_owner(c, evaluation_id, owner)
         old = c.execute(
             """
             SELECT interviewer_signature
@@ -866,7 +899,9 @@ def update_evaluation(
     "/api/evaluations/{evaluation_id}"
 )
 def delete_evaluation(
-    evaluation_id: str
+    evaluation_id: str,
+    request: Request,
+    mode: str = Query(..., pattern="^(user|admin)$"),
 ):
 
     """
@@ -877,8 +912,9 @@ def delete_evaluation(
     signature file needs to be deleted.
     """
 
+    owner = access_identity(request, mode)
     with conn() as c:
-
+        require_record_owner(c, evaluation_id, owner)
         deleted = c.execute(
             """
             DELETE FROM interview_evaluations
@@ -933,3 +969,191 @@ def signature(
         p,
         media_type="image/png"
     )
+
+# ============================================================
+# ADMIN-ONLY EXCEL IMPORT / EXPORT
+# ============================================================
+
+EXCEL_FIELDS = [
+    "Evaluation ID", "Candidate Name", "Applied Position", "Date of Interview",
+    *MAIN_CRITERIA, *HSE_CRITERIA,
+    "Main Total", "HSE Total", "Grand Total", "Overall Evaluation",
+    "Overall Comment", "Relationship Declaration", "Conflict of Interest",
+    "Fair Process Declaration", "Recommendation", "Interviewer Name",
+    "Interviewer Designation", "Created By", "Submitted At",
+]
+
+
+def excel_cell(value):
+    """Avoid Excel formula execution when exporting user-entered text."""
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + value
+    return value
+
+
+@app.get("/api/admin/evaluations/export")
+def export_evaluations_excel(request: Request):
+    current_admin(request)
+    with conn() as c:
+        cur = c.execute("SELECT * FROM interview_evaluations ORDER BY evaluation_id")
+        rows = [row_to_dict(cur, row) for row in cur.fetchall()]
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Interview Evaluations"
+    ws.append(EXCEL_FIELDS)
+    for record in rows:
+        scores = record.get("scores") or {}
+        values = [
+            record["evaluation_id"], record["candidate_name"],
+            record["applied_position"], record["date_of_interview"],
+            *(scores.get(k) for k in MAIN_CRITERIA + HSE_CRITERIA),
+            record["main_total"], record["hse_total"], record["grand_total"],
+            record["overall_evaluation"], record.get("overall_comment"),
+            record.get("relationship_declaration"), record.get("conflict_of_interest"),
+            record.get("fair_process_declaration"), record["recommendation"],
+            record["interviewer_name"], record["interviewer_designation"],
+            record.get("created_by"), record.get("submitted_at"),
+        ]
+        ws.append([excel_cell(v) for v in values])
+    for cell in ws[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="203047")
+        cell.alignment = Alignment(wrap_text=True)
+    ws.freeze_panes = "D2"
+    ws.auto_filter.ref = ws.dimensions
+    for index, heading in enumerate(EXCEL_FIELDS, 1):
+        ws.column_dimensions[get_column_letter(index)].width = min(max(len(heading) + 3, 14), 34)
+    date_col = EXCEL_FIELDS.index("Date of Interview") + 1
+    for row in ws.iter_rows(min_row=2):
+        row[date_col - 1].number_format = "yyyy-mm-dd"
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"lumut_interview_evaluations_{date.today().isoformat()}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                 "Cache-Control": "no-store"},
+    )
+
+
+@app.post("/api/admin/evaluations/import")
+async def import_evaluations_excel(request: Request, file: UploadFile = File(...)):
+    current_admin(request)
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(400, "Please upload an .xlsx file.")
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Excel file exceeds the 5 MB limit.")
+    try:
+        wb = load_workbook(BytesIO(contents), read_only=True, data_only=False)
+        ws = wb.active
+        iterator = ws.iter_rows(values_only=True)
+        header_row = next(iterator, None)
+        if not header_row:
+            raise ValueError("Excel sheet is empty.")
+        headings = [str(x).strip() if x is not None else "" for x in header_row]
+        if len(headings) != len(set(headings)):
+            raise ValueError("Duplicate column headers found.")
+        required = ["Candidate Name", "Applied Position", "Date of Interview",
+                    *MAIN_CRITERIA, *HSE_CRITERIA, "Overall Evaluation",
+                    "Recommendation", "Interviewer Name", "Interviewer Designation"]
+        missing = [name for name in required if name not in headings]
+        if missing:
+            raise ValueError("Missing columns: " + ", ".join(missing))
+        positions = {name: i for i, name in enumerate(headings)}
+    except Exception as exc:
+        raise HTTPException(400, f"Invalid Excel workbook: {exc}") from exc
+
+    imported, skipped, errors = 0, 0, []
+    try:
+        with conn() as c:
+            # Serialize ID generation against other imports and normal creates.
+            c.execute("SELECT pg_advisory_xact_lock(67389231)")
+            for row_number, cells in enumerate(iterator, 2):
+                if not any(value is not None and str(value).strip() for value in cells):
+                    continue
+                if imported + skipped + len(errors) >= 1000:
+                    errors.append("Limit of 1,000 rows per import reached.")
+                    break
+                def value(name, default=""):
+                    idx = positions.get(name)
+                    result = cells[idx] if idx is not None and idx < len(cells) else None
+                    if isinstance(result, str) and result.startswith("'") and result[1:2] in ("=", "+", "-", "@"):
+                        result = result[1:]
+                    if isinstance(result, str) and result.startswith("="):
+                        raise ValueError(f"Formula not allowed in {name}")
+                    return default if result is None else result
+
+                try:
+                    candidate = str(value("Candidate Name")).strip()
+                    position = str(value("Applied Position")).strip()
+                    interviewer = str(value("Interviewer Name")).strip()
+                    designation = str(value("Interviewer Designation")).strip()
+                    overall = str(value("Overall Evaluation")).strip()
+                    recommendation = str(value("Recommendation")).strip()
+                    if not all((candidate, position, interviewer, designation, overall, recommendation)):
+                        raise ValueError("Required text fields cannot be blank")
+                    raw_date = value("Date of Interview")
+                    if isinstance(raw_date, datetime):
+                        interview_date = raw_date.date()
+                    elif isinstance(raw_date, date):
+                        interview_date = raw_date
+                    else:
+                        interview_date = date.fromisoformat(str(raw_date).strip()[:10])
+                    scores = {}
+                    for criterion in MAIN_CRITERIA + HSE_CRITERIA:
+                        raw = value(criterion)
+                        if isinstance(raw, bool) or str(raw).strip() not in ("1", "2", "3", "4", "5"):
+                            raise ValueError(f"{criterion} must be an integer from 1 to 5")
+                        scores[criterion] = int(raw)
+                    main_total = sum(scores[k] for k in MAIN_CRITERIA)
+                    hse_total = sum(scores[k] for k in HSE_CRITERIA)
+                    raw_id = str(value("Evaluation ID")).strip()
+                    if raw_id and not re.fullmatch(r"INT-\d{4,}", raw_id):
+                        raise ValueError("Evaluation ID must be like INT-0001, or blank")
+                    if raw_id and c.execute(
+                        "SELECT 1 FROM interview_evaluations WHERE evaluation_id=%s", (raw_id,)
+                    ).fetchone():
+                        skipped += 1
+                        continue
+                    evaluation_id = raw_id or next_id(c)
+                    # An import is an Admin action; retain original ownership only when supplied.
+                    created_by = str(value("Created By")).strip() or None
+                    c.execute("SAVEPOINT import_row")
+                    try:
+                        c.execute("""
+                            INSERT INTO interview_evaluations (
+                                evaluation_id, candidate_name, applied_position, date_of_interview,
+                                scores, main_total, hse_total, grand_total, overall_evaluation,
+                                overall_comment, relationship_declaration, conflict_of_interest,
+                                fair_process_declaration, recommendation, interviewer_name,
+                                interviewer_designation, created_by
+                            ) VALUES (
+                                %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s
+                            )
+                        """, (
+                            evaluation_id, candidate, position, interview_date,
+                            psycopg.types.json.Json(scores), main_total, hse_total,
+                            main_total + hse_total, overall,
+                            str(value("Overall Comment")), str(value("Relationship Declaration")),
+                            str(value("Conflict of Interest", "No")),
+                            str(value("Fair Process Declaration", "No")), recommendation,
+                            interviewer, designation, created_by,
+                        ))
+                        c.execute("RELEASE SAVEPOINT import_row")
+                        imported += 1
+                    except Exception:
+                        c.execute("ROLLBACK TO SAVEPOINT import_row")
+                        c.execute("RELEASE SAVEPOINT import_row")
+                        raise
+                except Exception as exc:
+                    skipped += 1
+                    if len(errors) < 30:
+                        errors.append(f"Row {row_number}: {str(exc)[:180]}")
+    finally:
+        wb.close()
+    return {"imported": imported, "skipped": skipped, "errors": errors}
